@@ -1,5 +1,5 @@
 (() => {
-    const API_BASE = `${window.location.origin}/api`;
+    const API_BASE = window.API_BASE_URL || "http://localhost:7777/api";
 
     const STORE_ROUTES = {
         clientes: "clientes",

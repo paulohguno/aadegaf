@@ -5,16 +5,19 @@ let produtosVenda = [];
 // CRIAÇÃO DE PRODUTO
 // ==============================
 function abrirModalProduto() {
-    if (!estoque || estoque.length === 0) {
-        toast("Adicione itens no estoque primeiro!", "error");
-        return;
-    }
-    document.getElementById("prod_nome").value  = "";
-    document.getElementById("prod_preco").value = "";
-    itensSelecionadosParaProduto = [];
-    renderComposicaoTags();
-    atualizarSelectEstoqueProd();
-    openModal("modal-produto");
+    carregarEstoque(() => {
+        if (!estoque || estoque.length === 0) {
+            toast("Adicione itens no estoque primeiro!", "error");
+            return;
+        }
+
+        document.getElementById("prod_nome").value  = "";
+        document.getElementById("prod_preco").value = "";
+        itensSelecionadosParaProduto = [];
+        renderComposicaoTags();
+        atualizarSelectEstoqueProd();
+        openModal("modal-produto");
+    });
 }
 
 function atualizarSelectEstoqueProd() {
@@ -23,7 +26,7 @@ function atualizarSelectEstoqueProd() {
     sel.innerHTML =
         '<option value="">Selecione para adicionar...</option>' +
         estoque.map(i =>
-            `<option value="${i.id}">#${i.id} - ${i.nome} (Disp: ${i.quantidade} | R$${i.custo.toFixed(2)})</option>`
+            `<option value="${i.id}">#${i.id} - ${i.nome} (Disp: ${Number(i.quantidade) || 0} | R$${Number(i.custo).toFixed(2)})</option>`
         ).join("");
 }
 
@@ -106,7 +109,17 @@ function carregarProdutos() {
     if (!db) return;
     const tx = db.transaction("produtos", "readonly");
     tx.objectStore("produtos").getAll().onsuccess = e => {
-        produtosVenda = e.target.result;
+        produtosVenda = (e.target.result || []).map(produto => ({
+            ...produto,
+            preco: Number(produto.preco) || 0,
+            composicao: Array.isArray(produto.composicao)
+                ? produto.composicao.map(item => ({
+                    ...item,
+                    id: Number(item.id),
+                    qtdConsumo: Number(item.qtdConsumo) || 1,
+                }))
+                : [],
+        }));
         renderProdutosVenda();
     };
 }

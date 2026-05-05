@@ -11,9 +11,16 @@ let clientePendenciaAtual = null;
 // ==============================
 // MODAL HELPERS
 // ==============================
+let zIndexAtual = 1000;
+
 function openModal(id) {
     const el = document.getElementById(id);
-    if (el) { el.classList.add("active"); }
+
+    if (el) {
+        zIndexAtual++;
+        el.style.zIndex = zIndexAtual;
+        el.classList.add("active");
+    }
 }
 
 function closeModal(id) {
@@ -115,6 +122,155 @@ function openClientesList() {
     }
     openModal("modal-clientes-list");
 }
+
+function deletarCliente(id) {
+    const c = clientes.find(cl => cl.id === id);
+    if (!c) return;
+    if (!confirm(`Remover cliente "${c.nome}"?`)) return;
+    const tx = db.transaction("clientes", "readwrite");
+    tx.objectStore("clientes").delete(id);
+    tx.oncomplete = () => {
+        delete pendencias[id];
+        carregarClientes();
+        toast("Cliente removido.", "info");
+    };
+}
+
+// ==============================
+// PENDÊNCIAS
+// ==============================
+function adicionarAPendencia() {
+    if (!vendaAtual) return;
+    const clienteId = document.getElementById("select_cliente_venda").value;
+    if (!clienteId) { toast("Selecione um cliente!", "error"); return; }
+
+    if (!pendencias[clienteId]) pendencias[clienteId] = [];
+    pendencias[clienteId].push(JSON.parse(JSON.stringify(vendaAtual)));
+
+    renderListaClientesPendentes();
+    closeModal("modal-venda-prod");
+    toast("Adicionado à pendência!", "success");
+}
+
+function renderListaClientesPendentes() {
+    const lista = document.getElementById("listaClientesPendentes");
+    if (!lista) return;
+
+    let temPendencia = false;
+    let totalGeral   = 0;
+    let countGeral   = 0;
+
+    lista.innerHTML = "";
+
+    for (let clienteId in pendencias) {
+        if (pendencias[clienteId] && pendencias[clienteId].length > 0) {
+            temPendencia = true;
+            const cliente = clientes.find(c => c.id == clienteId);
+            const total   = pendencias[clienteId].reduce((acc, item) => acc + parseFloat(item.preco), 0);
+            totalGeral   += total;
+            countGeral   += pendencias[clienteId].length;
+
+            lista.innerHTML += `
+                <div class="client-pendencia-card" onclick="abrirModalPendenciaCliente(${clienteId})">
+                    <div class="client-nome">${cliente ? cliente.nome : "Cliente #" + clienteId}</div>
+                    <div class="client-info">
+                        <span>${pendencias[clienteId].length} item(s)</span>
+                        <span class="client-total">R$ ${total.toFixed(2)}</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    if (!temPendencia) {
+        lista.innerHTML = `
+            <div class="empty-cart">
+                <div class="empty-cart-icon">🛒</div>
+                <p>Nenhuma pendência<br>aberta</p>
+            </div>
+        `;
+    }
+
+    const statPend  = document.getElementById("stat-pendentes");
+    const statTotal = document.getElementById("stat-total-pend");
+    if (statPend)  statPend.textContent  = countGeral;
+    if (statTotal) statTotal.textContent = "R$" + totalGeral.toFixed(0);
+}
+
+function abrirModalPendenciaCliente(clienteId) {
+    clientePendenciaAtual = clienteId;
+    const cliente = clientes.find(c => c.id == clienteId);
+    document.getElementById("tituloModalPendenciaCliente").textContent =
+        `Pendências — ${cliente ? cliente.nome : "Cliente"}`;
+    document.getElementById("checkTodasPendencias").checked = false;
+    renderTabelaPendenciasCliente();
+    openModal("modal-pendencia-cliente");
+}
+
+function renderTabelaPendenciasCliente() {
+    const corpo = document.getElementById("corpoTabelaPendenciasCliente");
+    const itens = pendencias[clientePendenciaAtual] || [];
+
+    corpo.innerHTML = itens.map((item, index) => `
+        <tr>
+            <td>
+                <input type="checkbox" class="chk check-item-pendencia" value="${index}"
+                    onchange="calcularTotalSelecionadoPendencia()">
+            </td>
+            <td>
+                <strong>${item.nome}</strong><br>
+                <small style="color:var(--text3);font-family:var(--font-mono);font-size:10px">
+                    ${(item.composicao || []).map(c => `${c.nome} ×${c.qtdConsumo}`).join(", ")}
+                </small>
+            </td>
+            <td>
+                <input type="number" step="0.01" min="0"
+                    value="${parseFloat(item.preco).toFixed(2)}"
+                    style="width:90px;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);
+                        color:var(--gold2);border-radius:6px;font-family:var(--font-mono);font-size:13px;outline:none"
+                    onchange="atualizarValorPendencia(${index}, this.value)">
+            </td>
+            <td style="font-family:var(--font-mono);font-size:12px;color:var(--text3)">
+                R$ ${(item.custoCalculado || 0).toFixed(2)}
+            </td>
+            <td>
+                <button class="btn btn-success btn-sm" onclick="finalizarPendenciaIndividual(${index})">
+                    ✓ Pagar
+                </button>
+            </td>
+        </tr>
+    `).join("");
+
+    calcularTotalSelecionadoPendencia();
+}
+
+function atualizarValorPendencia(index, novoValor) {
+    const valor = parseFloat(novoValor);
+    if (!isNaN(valor) && valor >= 0) {
+        pendencias[clientePendenciaAtual][index].preco = valor;
+        calcularTotalSelecionadoPendencia();
+        renderListaClientesPendentes();
+    }
+}
+
+function toggleTodasPendencias(checkbox) {
+    document.querySelectorAll(".check-item-pendencia").forEach(c => c.checked = checkbox.checked);
+    calcularTotalSelecionadoPendencia();
+}
+
+function calcularTotalSelecionadoPendencia() {
+    const checks = document.querySelectorAll(".check-item-pendencia:checked");
+    let total = 0;
+    checks.forEach(c => {
+        const idx = parseInt(c.value);
+        if (pendencias[clientePendenciaAtual] && pendencias[clientePendenciaAtual][idx]) {
+            total += pendencias[clientePendenciaAtual][idx].preco;
+        }
+    });
+    const span = document.getElementById("spanTotalSelecionadoPendencia");
+    if (span) span.textContent = total.toFixed(2);
+}
+
 
 function deletarCliente(id) {
     const c = clientes.find(cl => cl.id === id);
@@ -531,29 +687,47 @@ function openDashboard() {
     const body = document.getElementById("dashboard-body");
     if (!db || !body) return;
 
+    openModal("modal-dashboard");
+    body.innerHTML = `<div style="padding:20px;color:var(--text3)">Carregando dashboard...</div>`;
+
     const tx = db.transaction("vendas", "readonly");
     tx.objectStore("vendas").getAll().onsuccess = e => {
-        const vendas = e.target.result;
+        try {
+            const vendas = Array.isArray(e.target.result) ? e.target.result : [];
+            const estoqueAtual = Array.isArray(estoque) ? estoque : [];
+            const pendenciasAtual = pendencias && typeof pendencias === "object" ? pendencias : {};
 
-        let totalBruto   = 0;
-        let totalLiquido = 0;
-        const porProduto = {};
-        const porCliente = {};
+            let totalBruto   = 0;
+            let totalLiquido = 0;
+            const porProduto = {};
+            const porCliente = {};
+            const porDia = {};
 
-        vendas.forEach(v => {
-            totalBruto   += v.valor || 0;
-            totalLiquido += (v.valor || 0) - (v.custoProducao || 0);
-            porProduto[v.produto] = (porProduto[v.produto] || 0) + (v.valor || 0);
-            if (v.cliente) porCliente[v.cliente] = (porCliente[v.cliente] || 0) + (v.valor || 0);
-        });
+            vendas.forEach(v => {
+                const valor = Number(v?.valor) || 0;
+                const custo = Number(v?.custoProducao) || 0;
+                totalBruto   += valor;
+                totalLiquido += valor - custo;
+                if (v?.produto) porProduto[v.produto] = (porProduto[v.produto] || 0) + valor;
+                if (v?.cliente) porCliente[v.cliente] = (porCliente[v.cliente] || 0) + valor;
+                
+                // Agrupar por dia
+                const dia = v?.data || new Date().toLocaleDateString('pt-BR');
+                if (!porDia[dia]) porDia[dia] = {};
+                if (!porDia[dia][v?.cliente]) porDia[dia][v?.cliente] = [];
+                porDia[dia][v?.cliente].push(v);
+            });
 
-        const topProdutos = Object.entries(porProduto).sort((a, b) => b[1] - a[1]).slice(0, 5);
-        const topClientes = Object.entries(porCliente).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const topProdutos = Object.entries(porProduto).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const topClientes = Object.entries(porCliente).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-        const totalEstoque = estoque.reduce((acc, i) => acc + i.quantidade * i.custo, 0);
-        const pendTotal    = Object.values(pendencias).flat().reduce((acc, i) => acc + i.preco, 0);
+            const totalEstoque = estoqueAtual.reduce((acc, i) => acc + (Number(i.quantidade) || 0) * (Number(i.custo) || 0), 0);
+            const pendTotal    = Object.values(pendenciasAtual)
+                .flat()
+                .reduce((acc, i) => acc + (Number(i?.preco) || 0), 0);
 
-        body.innerHTML = `
+            // Renderizar cards de resumo
+            let html = `
             <div class="analytics-grid" style="grid-template-columns:repeat(4,1fr)">
                 <div class="analytic-card">
                     <span class="ac-label">Receita Total</span>
@@ -576,58 +750,200 @@ function openDashboard() {
                     <div class="ac-sub">a receber</div>
                 </div>
             </div>
+            
+            <div class="historico-container">
+                <div class="historico-header">📋 Histórico de Vendas</div>
+            `;
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
-                <div>
-                    <div class="section-label" style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">
-                        Top Produtos
-                    </div>
-                    ${topProdutos.length === 0
-                        ? `<p style="color:var(--text3);font-size:12px">Sem dados</p>`
-                        : topProdutos.map(([nome, val], i) => `
-                            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-                                <span style="font-size:13px">${i + 1}. ${nome}</span>
-                                <span style="font-family:var(--font-mono);color:var(--gold2);font-size:12px">R$ ${val.toFixed(2)}</span>
-                            </div>
-                        `).join("")
-                    }
-                </div>
-                <div>
-                    <div class="section-label" style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">
-                        Top Clientes
-                    </div>
-                    ${topClientes.length === 0
-                        ? `<p style="color:var(--text3);font-size:12px">Sem dados</p>`
-                        : topClientes.map(([nome, val], i) => `
-                            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-                                <span style="font-size:13px">${i + 1}. ${nome}</span>
-                                <span style="font-family:var(--font-mono);color:var(--gold2);font-size:12px">R$ ${val.toFixed(2)}</span>
-                            </div>
-                        `).join("")
-                    }
-                </div>
-            </div>
+            // Renderizar vendas por dia (ordenadas por data decrescente)
+            const diasOrdenados = Object.keys(porDia).sort((a, b) => {
+                const dataA = new Date(a.split('/').reverse().join('-'));
+                const dataB = new Date(b.split('/').reverse().join('-'));
+                return dataB - dataA;
+            });
 
-            <div style="margin-top:16px;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius)">
-                <div style="font-family:var(--font-mono);font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">
-                    Clientes com Pendências em Aberto
-                </div>
-                ${Object.entries(pendencias).filter(([,v]) => v.length > 0).length === 0
-                    ? `<p style="color:var(--text3);font-size:12px">Nenhuma pendência aberta.</p>`
-                    : Object.entries(pendencias).filter(([,v]) => v.length > 0).map(([cId, items]) => {
-                        const c   = clientes.find(cl => cl.id == cId);
-                        const tot = items.reduce((a, i) => a + i.preco, 0);
-                        return `
-                            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)">
-                                <span style="font-size:13px">${c ? c.nome : "Cliente"} — ${items.length} item(s)</span>
-                                <span style="font-family:var(--font-mono);color:var(--gold2)">R$ ${tot.toFixed(2)}</span>
+            diasOrdenados.forEach(dia => {
+                const clientesDoDia = porDia[dia];
+                let totalDia = 0;
+                let totalClientesDia = 0;
+
+                Object.values(clientesDoDia).forEach(vds => {
+                    vds.forEach(v => {
+                        totalDia += Number(v?.valor) || 0;
+                        totalClientesDia++;
+                    });
+                });
+
+                html += `
+                <div class="historico-dia" data-dia="${dia}">
+                    <div class="historico-dia-header" onclick="toggleHistoricoDia(this)">
+                        <span>${dia} • ${totalClientesDia} vendas • R$ ${totalDia.toFixed(2)}</span>
+                        <span class="historico-dia-chevron">▼</span>
+                    </div>
+                    <div class="historico-dia-body">
+                `;
+
+                Object.entries(clientesDoDia).forEach(([cliente, vendas]) => {
+                    let totalCliente = 0;
+                    vendas.forEach(v => totalCliente += Number(v?.valor) || 0);
+
+                    html += `
+                    <div class="cliente-venda-item" onclick="toggleClienteHistorico(this)">
+                        <div class="cliente-venda-info">
+                            <span class="cliente-venda-nome">${cliente || "Cliente Sem Nome"}</span>
+                            <span class="cliente-venda-valor">R$ ${totalCliente.toFixed(2)}</span>
+                        </div>
+                        <span class="cliente-venda-acao">▶</span>
+                    </div>
+                    <div class="produtos-vendidos">
+                    `;
+
+                    vendas.forEach(v => {
+                        const vendaId = v?.id || Math.random();
+                        html += `
+                        <div class="produto-venda-line">
+                            <span class="produto-venda-nome">${v?.produto || "Produto"}</span>
+                            <span class="produto-venda-preco">R$ ${(Number(v?.valor) || 0).toFixed(2)}</span>
+                            <div class="produto-venda-acoes">
+                                <button class="btn-revert" onclick="revertirVenda(${vendaId}, this)" title="Reverter venda">⌫</button>
+                                <button class="btn-add-item" onclick="adicionarItemFaltante(${vendaId}, '${cliente}', this)" title="Adicionar item">✚</button>
                             </div>
+                        </div>
                         `;
-                    }).join("")
-                }
-            </div>
-        `;
+                    });
 
-        openModal("modal-dashboard");
+                    html += `
+                    </div>
+                    `;
+                });
+
+                html += `
+                    </div>
+                </div>
+                `;
+            });
+
+            html += `</div>`;
+
+            body.innerHTML = html;
+        } catch (error) {
+            console.error("Erro ao montar dashboard:", error);
+            body.innerHTML = `<div style="padding:20px;color:var(--text3)">Não foi possível montar o dashboard.</div>`;
+        }
     };
+}
+
+// Expandir/Colapsar dia
+function toggleHistoricoDia(header) {
+    const dia = header.closest(".historico-dia");
+    dia.classList.toggle("collapsed");
+}
+
+// Expandir/Colapsar cliente
+function toggleClienteHistorico(item) {
+    item.classList.toggle("expanded");
+}
+
+// Reverter uma venda
+function revertirVenda(vendaId, btn) {
+    if (!confirm("Tem certeza que deseja reverter essa venda?")) return;
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("DELETE", `/api/vendas/${vendaId}`, true);
+    xhr.onload = () => {
+        if (xhr.status === 200) {
+            toast("Venda revertida com sucesso!", "success");
+            openDashboard();
+        } else {
+            toast("Erro ao reverter venda", "error");
+        }
+    };
+    xhr.onerror = () => toast("Erro na requisição", "error");
+    xhr.send();
+}
+
+// Adicionar item faltante
+let _itemFaltanteContext = { vendaId: null, cliente: null };
+
+function adicionarItemFaltante(vendaId, cliente, btn) {
+    _itemFaltanteContext = { vendaId, cliente };
+    
+    // Limpar campos
+    document.getElementById("add-item-qtd").value = "1";
+    document.getElementById("add-item-valor").value = "0";
+    document.getElementById("add-item-custo").value = "0";
+
+    // Renderizar lista de itens do estoque
+    const lista = document.getElementById("lista-estoque-itens");
+    if (!estoque || estoque.length === 0) {
+        lista.innerHTML = `<div style="padding: 20px; color: var(--text3); text-align: center;">Nenhum item no estoque</div>`;
+    } else {
+        lista.innerHTML = estoque.map(item => `
+            <div class="estoque-item-select" onclick="selecionarEstoqueParaAdicionar(${item.id}, '${item.nome}', ${item.custo})">
+                <span class="estoque-item-nome">${item.nome}</span>
+                <span class="estoque-item-qta">Qtd: ${item.quantidade}</span>
+                <span class="estoque-item-custo">R$ ${Number(item.custo).toFixed(2)}</span>
+            </div>
+        `).join("");
+    }
+
+    openModal("modal-add-item-estoque");
+}
+
+function selecionarEstoqueParaAdicionar(itemId, itemNome, itemCusto) {
+    // Remover seleção anterior
+    document.querySelectorAll(".estoque-item-select.selected").forEach(el => {
+        el.classList.remove("selected");
+    });
+
+    // Marcar como selecionado
+    event.target.closest(".estoque-item-select").classList.add("selected");
+
+    // Preencher valor (pode ser o custo ou ser alterado)
+    document.getElementById("add-item-valor").value = Number(itemCusto).toFixed(2);
+    document.getElementById("add-item-custo").value = Number(itemCusto).toFixed(2);
+
+    // Guardar o nome do produto selecionado
+    _itemFaltanteContext.produtoNome = itemNome;
+}
+
+function confirmarAdicionarItemFaltante() {
+    if (!_itemFaltanteContext.produtoNome) {
+        toast("Selecione um item do estoque!", "error");
+        return;
+    }
+
+    const qtd = parseInt(document.getElementById("add-item-qtd").value) || 1;
+    const valor = parseFloat(document.getElementById("add-item-valor").value) || 0;
+    const custo = parseFloat(document.getElementById("add-item-custo").value) || 0;
+
+    if (qtd <= 0 || valor < 0 || custo < 0) {
+        toast("Preencha os valores corretamente!", "error");
+        return;
+    }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/vendas", true);
+    xhr.setRequestHeader("Content-Type", "application/json");
+    xhr.onload = () => {
+        if (xhr.status === 201) {
+            toast("Item adicionado com sucesso!", "success");
+            closeModal("modal-add-item-estoque");
+            openDashboard();
+        } else {
+            toast("Erro ao adicionar item", "error");
+        }
+    };
+    xhr.onerror = () => toast("Erro na requisição", "error");
+    
+    // Adicionar múltiplas vendas se qtd > 1
+    for (let i = 0; i < qtd; i++) {
+        xhr.send(JSON.stringify({
+            produto: _itemFaltanteContext.produtoNome,
+            valor: valor,
+            custoProducao: custo,
+            cliente: _itemFaltanteContext.cliente,
+            data: new Date().toLocaleDateString('pt-BR')
+        }));
+    }
 }

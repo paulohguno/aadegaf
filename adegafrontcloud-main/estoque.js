@@ -66,8 +66,8 @@ function salvarNoEstoque() {
 
     tx.oncomplete = () => {
         _bloqueioEstoque = false;
+        closeModal("modal-estoque");
         carregarEstoque(() => {
-            closeModal("modal-estoque");
             toast(`Estoque atualizado: +${qtdAdd} ${nome}`, "success");
         });
     };
@@ -82,7 +82,11 @@ function carregarEstoque(callback) {
     if (!db) return;
     const tx = db.transaction("estoque", "readonly");
     tx.objectStore("estoque").getAll().onsuccess = e => {
-        estoque = e.target.result;
+        estoque = (e.target.result || []).map(item => ({
+            ...item,
+            quantidade: Number(item.quantidade) || 0,
+            custo: Number(item.custo) || 0,
+        }));
         renderEstoque();
         if (callback) callback();
     };
@@ -132,8 +136,9 @@ function deletarItemEstoque(id) {
 }
 
 function openEstoqueRelatorio() {
-    renderEstoque();
-    openModal("modal-estoque-rel");
+    carregarEstoque(() => {
+        openModal("modal-estoque-rel");
+    });
 }
 
 function renderEstoque() {
@@ -157,8 +162,8 @@ function renderEstoque() {
                 <td><span style="color:var(--text3);font-family:var(--font-mono)">#${i.id}</span></td>
                 <td><strong>${i.nome}</strong>${badge ? " " + badge : ""}</td>
                 <td style="font-family:var(--font-mono)">${i.quantidade}</td>
-                <td style="font-family:var(--font-mono);color:var(--gold)">R$ ${i.custo.toFixed(2)}</td>
-                <td style="font-family:var(--font-mono)">R$ ${(i.quantidade * i.custo).toFixed(2)}</td>
+                <td style="font-family:var(--font-mono);color:var(--gold)">R$ ${Number(i.custo).toFixed(2)}</td>
+                <td style="font-family:var(--font-mono)">R$ ${(Number(i.quantidade) * Number(i.custo)).toFixed(2)}</td>
                 <td>
                     <div style="display:flex;gap:6px;align-items:center">
                         <input type="number" id="qtd_rem_${i.id}" value="1" min="1"

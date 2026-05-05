@@ -1082,6 +1082,238 @@ select.inp option { background: var(--bg3); }
 =========================== */
 .glow-gold { box-shadow: 0 0 20px rgba(200,146,58,0.25); }
 .glow-green { box-shadow: 0 0 20px rgba(76,175,122,0.2); }
+
+/* ===========================
+   HISTÓRICO DE VENDAS
+=========================== */
+.historico-container {
+  margin-top: 20px;
+}
+
+.historico-header {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--gold2);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.historico-dia {
+  margin-bottom: 16px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.historico-dia-header {
+  background: var(--bg4);
+  padding: 10px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--gold2);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.historico-dia-header:hover {
+  background: rgba(200,146,58,0.1);
+}
+
+.historico-dia-chevron {
+  transition: transform 0.3s;
+  font-size: 12px;
+}
+
+.historico-dia.collapsed .historico-dia-chevron {
+  transform: rotate(-90deg);
+}
+
+.historico-dia-body {
+  max-height: 600px;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  opacity: 1;
+}
+
+.historico-dia.collapsed .historico-dia-body {
+  max-height: 0;
+  opacity: 0;
+}
+
+.cliente-venda-item {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.cliente-venda-item:hover {
+  background: rgba(200,146,58,0.05);
+}
+
+.cliente-venda-item:last-child {
+  border-bottom: none;
+}
+
+.cliente-venda-info {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cliente-venda-nome {
+  color: var(--text);
+  font-weight: 500;
+  flex: 1;
+}
+
+.cliente-venda-valor {
+  color: var(--gold2);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  margin-right: 20px;
+}
+
+.cliente-venda-acao {
+  font-size: 14px;
+  color: var(--text3);
+}
+
+.produtos-vendidos {
+  background: var(--bg2);
+  padding: 10px 14px;
+  margin: 0;
+  list-style: none;
+  display: none;
+}
+
+.cliente-venda-item.expanded ~ .produtos-vendidos {
+  display: block;
+}
+
+.produto-venda-line {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.produto-venda-line:last-child {
+  border-bottom: none;
+}
+
+.produto-venda-nome {
+  flex: 1;
+  padding-right: 10px;
+}
+
+.produto-venda-preco {
+  color: var(--gold);
+  font-family: var(--font-mono);
+  min-width: 70px;
+  text-align: right;
+  margin-right: 10px;
+}
+
+.produto-venda-acoes {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-revert {
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--wine);
+  color: var(--wine);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: var(--transition);
+}
+
+.btn-revert:hover {
+  background: var(--wine);
+  color: var(--text);
+}
+
+.btn-add-item {
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--green2);
+  color: var(--green2);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: var(--transition);
+}
+
+.btn-add-item:hover {
+  background: var(--green2);
+  color: var(--text);
+}
+
+/* ===========================
+   ESTOQUE ITEM SELECT
+=========================== */
+.estoque-item-select {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.estoque-item-select:hover {
+  background: rgba(200,146,58,0.1);
+}
+
+.estoque-item-select:last-child {
+  border-bottom: none;
+}
+
+.estoque-item-select.selected {
+  background: rgba(76,175,122,0.15);
+  border-left: 3px solid var(--green);
+}
+
+.estoque-item-nome {
+  flex: 1;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.estoque-item-qta {
+  color: var(--text2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-right: 15px;
+}
+
+.estoque-item-custo {
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  min-width: 80px;
+  text-align: right;
+}
 </style>
 </head>
 
@@ -1097,7 +1329,7 @@ select.inp option { background: var(--bg3); }
     </div>
     <nav class="sidebar-nav">
       <span class="nav-label">Catálogo</span>
-      <button class="nav-btn" onclick="openModal('modal-produto')">
+      <button class="nav-btn" onclick="abrirModalProduto()">
         <span class="nav-icon">➕</span>
         <span class="nav-text">Novo Produto</span>
       </button>
@@ -1409,6 +1641,42 @@ select.inp option { background: var(--bg3); }
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeModal('modal-pendencia-cliente')">Fechar</button>
       <button class="btn btn-success" onclick="finalizarPendenciasSelecionadas()">✓ Finalizar Selecionados</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD ITEM FALTANTE DO ESTOQUE -->
+<div class="modal-overlay" id="modal-add-item-estoque">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Adicionar Item Faltante</div>
+      <button class="modal-close" onclick="closeModal('modal-add-item-estoque')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Selecione o item</label>
+        <div id="lista-estoque-itens" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg3);">
+          <div style="padding: 20px; color: var(--text3); text-align: center;">Carregando itens...</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px">
+        <div class="field">
+          <label>Quantidade</label>
+          <input id="add-item-qtd" type="number" class="inp" placeholder="1" min="1" value="1">
+        </div>
+        <div class="field">
+          <label>Valor Unitário (R$)</label>
+          <input id="add-item-valor" type="number" class="inp" placeholder="0.00" step="0.01" min="0" value="0">
+        </div>
+      </div>
+      <div class="field">
+        <label>Custo de Produção (R$)</label>
+        <input id="add-item-custo" type="number" class="inp" placeholder="0.00" step="0.01" min="0" value="0">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeModal('modal-add-item-estoque')">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmarAdicionarItemFaltante()">✓ Adicionar</button>
     </div>
   </div>
 </div>

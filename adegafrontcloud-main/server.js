@@ -6,7 +6,7 @@ const path = require("path");
 const db = require("./models");
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
+const basePort = Number(process.env.PORT || 7777);
 
 app.use(cors());
 app.use(express.json());
@@ -35,10 +35,18 @@ app.use((err, _req, res, _next) => {
 async function start() {
   try {
     await db.sequelize.authenticate();
-    await db.sequelize.sync();
+    //await db.sequelize.sync({ force: true });
+    const server = app.listen(basePort, () => {
+      console.log(`Servidor iniciado em http://localhost:${basePort}`);
+    });
 
-    app.listen(port, () => {
-      console.log(`Servidor iniciado em http://localhost:${port}`);
+    server.on("error", (error) => {
+      if (error && error.code === "EADDRINUSE") {
+        console.error(`Porta ${basePort} em uso. Pare o processo que usa essa porta ou altere PORT.`);
+      } else {
+        console.error("Erro ao iniciar servidor:", error.message || error);
+      }
+      process.exit(1);
     });
   } catch (error) {
     console.error("Falha ao conectar no banco:", error.message || error);
