@@ -144,18 +144,12 @@ function adicionarAPendencia() {
     const clienteId = document.getElementById("select_cliente_venda").value;
     if (!clienteId) { toast("Selecione um cliente!", "error"); return; }
 
-    const qtd = parseInt(document.getElementById("venda-qtd").value) || 1;
-    if (qtd <= 0) { toast("Quantidade deve ser maior que zero!", "error"); return; }
-
     if (!pendencias[clienteId]) pendencias[clienteId] = [];
-    
-    for (let i = 0; i < qtd; i++) {
-        pendencias[clienteId].push(JSON.parse(JSON.stringify(vendaAtual)));
-    }
+    pendencias[clienteId].push(JSON.parse(JSON.stringify(vendaAtual)));
 
     renderListaClientesPendentes();
     closeModal("modal-venda-prod");
-    toast(`${qtd} item(s) adicionado(s) à pendência!`, "success");
+    toast("Adicionado à pendência!", "success");
 }
 
 function renderListaClientesPendentes() {
@@ -362,8 +356,227 @@ function confirmarVendaMultipla() {
             valor: vendaMultiplaAtual.preco,
             custoProducao: 0,
             cliente: cliente ? cliente.nome : "",
-            data: new Date().toLocaleDateString('pt-BR'),
-            hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+            data: new Date().toLocaleDateString('pt-BR')
+        }));
+    }
+}
+
+function renderListaClientesPendentes() {
+    const lista = document.getElementById("listaClientesPendentes");
+    if (!lista) return;
+
+    let temPendencia = false;
+    let totalGeral   = 0;
+    let countGeral   = 0;
+
+    lista.innerHTML = "";
+
+function renderListaClientesPendentes() {
+    const lista = document.getElementById("listaClientesPendentes");
+    if (!lista) return;
+
+    let temPendencia = false;
+    let totalGeral   = 0;
+    let countGeral   = 0;
+
+    lista.innerHTML = "";
+
+    for (let clienteId in pendencias) {
+        if (pendencias[clienteId] && pendencias[clienteId].length > 0) {
+            temPendencia = true;
+            const cliente = clientes.find(c => c.id == clienteId);
+            const total   = pendencias[clienteId].reduce((acc, item) => acc + parseFloat(item.preco), 0);
+            totalGeral   += total;
+            countGeral   += pendencias[clienteId].length;
+
+            lista.innerHTML += `
+                <div class="client-pendencia-card" onclick="abrirModalPendenciaCliente(${clienteId})">
+                    <div class="client-nome">${cliente ? cliente.nome : "Cliente #" + clienteId}</div>
+                    <div class="client-info">
+                        <span>${pendencias[clienteId].length} item(s)</span>
+                        <span class="client-total">R$ ${total.toFixed(2)}</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+
+    if (!temPendencia) {
+        lista.innerHTML = `
+            <div class="empty-cart">
+                <div class="empty-cart-icon">🛒</div>
+                <p>Nenhuma pendência<br>aberta</p>
+            </div>
+        `;
+    }
+
+    // Stats footer
+    const statPend  = document.getElementById("stat-pendentes");
+    const statTotal = document.getElementById("stat-total-pend");
+    if (statPend)  statPend.textContent  = countGeral;
+    if (statTotal) statTotal.textContent = "R$" + totalGeral.toFixed(0);
+}
+
+function abrirModalPendenciaCliente(clienteId) {
+    clientePendenciaAtual = clienteId;
+    const cliente = clientes.find(c => c.id == clienteId);
+    document.getElementById("tituloModalPendenciaCliente").textContent =
+        `Pendências — ${cliente ? cliente.nome : "Cliente"}`;
+    document.getElementById("checkTodasPendencias").checked = false;
+    renderTabelaPendenciasCliente();
+    openModal("modal-pendencia-cliente");
+}
+
+function renderTabelaPendenciasCliente() {
+    const corpo = document.getElementById("corpoTabelaPendenciasCliente");
+    const itens = pendencias[clientePendenciaAtual] || [];
+
+    corpo.innerHTML = itens.map((item, index) => `
+        <tr>
+            <td>
+                <input type="checkbox" class="chk check-item-pendencia" value="${index}"
+                    onchange="calcularTotalSelecionadoPendencia()">
+            </td>
+            <td>
+                <strong>${item.nome}</strong><br>
+                <small style="color:var(--text3);font-family:var(--font-mono);font-size:10px">
+                    ${(item.composicao || []).map(c => `${c.nome} ×${c.qtdConsumo}`).join(", ")}
+                </small>
+            </td>
+            <td>
+                <input type="number" step="0.01" min="0"
+                    value="${parseFloat(item.preco).toFixed(2)}"
+                    style="width:90px;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);
+                           color:var(--gold2);border-radius:6px;font-family:var(--font-mono);font-size:13px;outline:none"
+                    onchange="atualizarValorPendencia(${index}, this.value)">
+            </td>
+            <td style="font-family:var(--font-mono);font-size:12px;color:var(--text3)">
+                R$ ${(item.custoCalculado || 0).toFixed(2)}
+            </td>
+            <td>
+                <button class="btn btn-success btn-sm" onclick="finalizarPendenciaIndividual(${index})">
+                    ✓ Pagar
+                </button>
+            </td>
+        </tr>
+    `).join("");
+
+    calcularTotalSelecionadoPendencia();
+}
+
+function atualizarValorPendencia(index, novoValor) {
+    const valor = parseFloat(novoValor);
+    if (!isNaN(valor) && valor >= 0) {
+        pendencias[clientePendenciaAtual][index].preco = valor;
+        calcularTotalSelecionadoPendencia();
+        renderListaClientesPendentes();
+    }
+}
+
+function toggleTodasPendencias(checkbox) {
+    document.querySelectorAll(".check-item-pendencia").forEach(c => c.checked = checkbox.checked);
+    calcularTotalSelecionadoPendencia();
+}
+
+function calcularTotalSelecionadoPendencia() {
+    const checks = document.querySelectorAll(".check-item-pendencia:checked");
+    let total = 0;
+    checks.forEach(c => {
+        const idx = parseInt(c.value);
+        if (pendencias[clientePendenciaAtual] && pendencias[clientePendenciaAtual][idx]) {
+            total += pendencias[clientePendenciaAtual][idx].preco;
+        }
+    });
+    const span = document.getElementById("spanTotalSelecionadoPendencia");
+    if (span) span.textContent = total.toFixed(2);
+}
+
+// ==============================
+// VENDER MÚLTIPLAS UNIDADES
+// ==============================
+let vendaMultiplaAtual = null;
+
+function abrirVendaMultipla() {
+    document.getElementById("venda-multipla-cliente").value = "";
+    document.getElementById("venda-multipla-qtd").value = "1";
+    document.getElementById("lista-produtos-multipla").innerHTML = produtosVenda.map(p => `
+        <div class="estoque-item-select" onclick="selecionarProdutoMultipla(${p.id}, '${p.nome}', ${p.preco})">
+            <span class="estoque-item-nome">${p.nome}</span>
+            <span class="estoque-item-custo">R$ ${p.preco.toFixed(2)}</span>
+        </div>
+    `).join("");
+    renderClientesSelect();
+    openModal("modal-venda-multipla");
+}
+
+function selecionarProdutoMultipla(produtoId, nome, preco) {
+    document.querySelectorAll("#lista-produtos-multipla .estoque-item-select.selected").forEach(el => {
+        el.classList.remove("selected");
+    });
+    event.target.closest(".estoque-item-select").classList.add("selected");
+    vendaMultiplaAtual = { id: produtoId, nome, preco };
+}
+
+function confirmarVendaMultipla() {
+    if (!vendaMultiplaAtual) {
+        toast("Selecione um produto!", "error");
+        return;
+    }
+    
+    const clienteId = document.getElementById("venda-multipla-cliente").value;
+    if (!clienteId) {
+        toast("Selecione um cliente!", "error");
+        return;
+    }
+    
+    const qtd = parseInt(document.getElementById("venda-multipla-qtd").value) || 1;
+    if (qtd <= 0) {
+        toast("Quantidade deve ser maior que zero!", "error");
+        return;
+    }
+
+    let sucessos = 0;
+    let erros = 0;
+    
+    for (let i = 0; i < qtd; i++) {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/vendas", true);
+        xhr.setRequestHeader("Content-Type", "application/json");
+        
+        xhr.onload = () => {
+            if (xhr.status === 201) {
+                sucessos++;
+            } else {
+                erros++;
+            }
+            
+            if (sucessos + erros === qtd) {
+                if (erros === 0) {
+                    toast(`${sucessos} venda(s) registrada(s) com sucesso!`, "success");
+                    closeModal("modal-venda-multipla");
+                    carregarClientes();
+                } else if (sucessos > 0) {
+                    toast(`${sucessos} venda(s) registrada(s), ${erros} falharam!`, "warning");
+                } else {
+                    toast("Erro ao registrar vendas", "error");
+                }
+            }
+        };
+        
+        xhr.onerror = () => {
+            erros++;
+            if (sucessos + erros === qtd) {
+                toast("Erro na requisição", "error");
+            }
+        };
+        
+        const cliente = clientes.find(c => c.id == clienteId);
+        xhr.send(JSON.stringify({
+            produto: vendaMultiplaAtual.nome,
+            valor: vendaMultiplaAtual.preco,
+            custoProducao: 0,
+            cliente: cliente ? cliente.nome : "",
+            data: new Date().toLocaleDateString('pt-BR')
         }));
     }
 }
@@ -483,7 +696,6 @@ function abrirVenda(id) {
 
     renderClientesSelect();
     renderItensVendaAtuais();
-    document.getElementById("venda-qtd").value = "1";
     openModal("modal-venda-prod");
 }
 
@@ -557,14 +769,6 @@ function adicionarItemAoComboVenda(idStr) {
 // VENDAS MODAL
 // ==============================
 function openVendas() {
-    const filtroDia = document.getElementById("filtro-venda-dia");
-    if (filtroDia && !filtroDia.value) {
-        const hoje = new Date();
-        const ano = hoje.getFullYear();
-        const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-        const dia = String(hoje.getDate()).padStart(2, "0");
-        filtroDia.value = `${ano}-${mes}-${dia}`;
-    }
     renderVendas();
     openModal("modal-vendas");
 }
@@ -573,263 +777,67 @@ function renderVendas() {
     const corpo = document.getElementById("corpoVendas");
     if (!corpo || !db) return;
 
-    const filtroDia = document.getElementById("filtro-venda-dia");
-    if (filtroDia && !filtroDia.value) {
-        const hoje = new Date();
-        const ano = hoje.getFullYear();
-        const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-        const dia = String(hoje.getDate()).padStart(2, "0");
-        filtroDia.value = `${ano}-${mes}-${dia}`;
-    }
-
     const tx = db.transaction("vendas", "readonly");
     tx.objectStore("vendas").getAll().onsuccess = e => {
-        const vendas = Array.isArray(e.target.result) ? e.target.result : [];
-        const porDia = {};
-        let totalGeral = 0;
+        const vendas = e.target.result;
 
-        vendas.forEach(v => {
-            let dia = v?.data || new Date().toLocaleDateString('pt-BR');
-            dia = dia.split(',')[0];
-            if (!porDia[dia]) porDia[dia] = {};
-            if (!porDia[dia][v?.cliente]) porDia[dia][v?.cliente] = [];
-            porDia[dia][v?.cliente].push(v);
-            totalGeral += Number(v?.valor) || 0;
-        });
+        let totalBruto   = 0;
+        let totalCustos  = 0;
+        let totalLiquido = 0;
 
-        // Obter filtro selecionado (date input retorna yyyy-mm-dd)
-        const dataFiltro = filtroDia ? filtroDia.value : "";
-        
-        // Converter data selecionada (yyyy-mm-dd) para formato pt-BR (dd/mm/yyyy) se houver filtro
-        let diaFiltro = "";
-        if (dataFiltro) {
-            const [ano, mes, dia] = dataFiltro.split('-');
-            diaFiltro = `${dia}/${mes}/${ano}`;
-        }
-        
-        // Definir quais dias exibir
-        const diasParaExibir = diaFiltro ? [diaFiltro] : Object.keys(porDia).sort((a, b) => {
-            const dataA = new Date(a.split('/').reverse().join('-'));
-            const dataB = new Date(b.split('/').reverse().join('-'));
-            return dataB - dataA;
-        });
-
-        // Calcular soma do filtro
-        let somaFiltrada = 0;
-        diasParaExibir.forEach(dia => {
-            if (porDia[dia]) {
-                Object.values(porDia[dia]).forEach(vds => {
-                    vds.forEach(v => {
-                        somaFiltrada += Number(v?.valor) || 0;
-                    });
-                });
-            }
-        });
-
-        // Atualizar soma
-        const somaSpan = document.getElementById("soma-vendas");
-        if (somaSpan) somaSpan.textContent = `R$ ${somaFiltrada.toFixed(2)}`;
-
-        let html = ``;
-
-        diasParaExibir.forEach(dia => {
-            const clientesDoDia = porDia[dia];
-            let totalDia = 0;
-            let totalClientesDia = 0;
-
-            Object.values(clientesDoDia).forEach(vds => {
-                vds.forEach(v => {
-                    totalDia += Number(v?.valor) || 0;
-                    totalClientesDia++;
-                });
-            });
-
-            html += `
-            <div class="historico-dia" data-dia="${dia}">
-                <div class="historico-dia-header" onclick="toggleHistoricoDia(this)">
-                    <span>${dia} • ${totalClientesDia} vendas • R$ ${totalDia.toFixed(2)}</span>
-                    <span class="historico-dia-chevron">▼</span>
-                </div>
-                <div class="historico-dia-body">
+        corpo.innerHTML = vendas.map(v => {
+            totalBruto   += v.valor || 0;
+            totalCustos  += v.custoProducao || 0;
+            const lucro   = (v.valor || 0) - (v.custoProducao || 0);
+            totalLiquido += lucro;
+            return `
+                <tr>
+                    <td><strong>${v.produto}</strong></td>
+                    <td>${v.cliente || "Balcão"}</td>
+                    <td style="font-family:var(--font-mono);color:var(--gold2)">R$ ${(v.valor || 0).toFixed(2)}</td>
+                    <td style="font-family:var(--font-mono);color:var(--text3)">R$ ${(v.custoProducao || 0).toFixed(2)}</td>
+                    <td style="font-family:var(--font-mono);color:${lucro >= 0 ? "var(--green)" : "#ff6b6b"}">
+                        R$ ${lucro.toFixed(2)}
+                    </td>
+                    <td style="font-size:11px;color:var(--text3)">${v.data}</td>
+                </tr>
             `;
+        }).reverse().join("");
 
-            Object.entries(clientesDoDia).forEach(([cliente, vendas]) => {
-                let totalCliente = 0;
-                vendas.forEach(v => totalCliente += Number(v?.valor) || 0);
+        corpo.innerHTML += `
+            <tr class="total-row">
+                <td colspan="2"><strong>TOTAIS</strong></td>
+                <td>R$ ${totalBruto.toFixed(2)}</td>
+                <td>R$ ${totalCustos.toFixed(2)}</td>
+                <td>R$ ${totalLiquido.toFixed(2)}</td>
+                <td>${vendas.length} vendas</td>
+            </tr>
+        `;
 
-                html += `
-                <div class="cliente-venda-item" onclick="toggleClienteHistorico(this)">
-                    <div class="cliente-venda-info">
-                        <span class="cliente-venda-nome">${cliente || "Cliente Sem Nome"}</span>
-                        <span class="cliente-venda-valor">R$ ${totalCliente.toFixed(2)}</span>
+        // Analytics
+        const analytics = document.getElementById("vendas-analytics");
+        if (analytics) {
+            analytics.innerHTML = `
+                <div class="analytic-card">
+                    <span class="ac-label">Total Bruto</span>
+                    <div class="ac-value" style="font-size:18px">R$ ${totalBruto.toFixed(2)}</div>
+                    <div class="ac-sub">${vendas.length} vendas</div>
+                </div>
+                <div class="analytic-card">
+                    <span class="ac-label">Custos</span>
+                    <div class="ac-value" style="font-size:18px;color:var(--text2)">R$ ${totalCustos.toFixed(2)}</div>
+                    <div class="ac-sub">produção total</div>
+                </div>
+                <div class="analytic-card">
+                    <span class="ac-label">Lucro Líquido</span>
+                    <div class="ac-value" style="font-size:18px;color:${totalLiquido >= 0 ? "var(--green)" : "#ff6b6b"}">
+                        R$ ${totalLiquido.toFixed(2)}
                     </div>
-                    <span class="cliente-venda-acao">▶</span>
+                    <div class="ac-sub">${totalBruto > 0 ? ((totalLiquido / totalBruto) * 100).toFixed(1) : 0}% margem</div>
                 </div>
-                <div class="produtos-vendidos">
-                `;
-
-                vendas.forEach(v => {
-                    const horaVenda = v?.hora ? ` • ${v.hora}` : "";
-                    html += `
-                    <div class="produto-venda-line">
-                        <div class="produto-venda-row">
-                            <span class="produto-venda-nome">${v?.produto || "Produto"}</span>
-                            <span class="produto-venda-preco">R$ ${(Number(v?.valor) || 0).toFixed(2)}</span>
-                        </div>
-                        <span class="produto-venda-hora">${horaVenda}</span>
-                    </div>
-                    `;
-                });
-
-                html += `
-                </div>
-                `;
-            });
-
-            html += `
-                </div>
-            </div>
             `;
-        });
-
-        corpo.innerHTML = html;
-    };
-}
-
-// Adicionar item faltante a uma venda
-function adicionarItemFaltanteVenda(vendaId, btn) {
-    if (!db) return;
-    
-    const tx = db.transaction("vendas", "readonly");
-    tx.objectStore("vendas").get(vendaId).onsuccess = e => {
-        const venda = e.target.result;
-        if (!venda) { toast("Venda não encontrada!", "error"); return; }
-        
-        // Limpar e preparar modal
-        document.getElementById("add-item-venda-qtd").value = "1";
-        document.getElementById("add-item-venda-valor").value = "0";
-        document.getElementById("add-item-venda-custo").value = "0";
-        
-        // Renderizar lista de itens do estoque
-        const lista = document.getElementById("lista-estoque-itens-venda");
-        if (!estoque || estoque.length === 0) {
-            lista.innerHTML = `<div style="padding: 20px; color: var(--text3); text-align: center;">Nenhum item no estoque</div>`;
-        } else {
-            lista.innerHTML = estoque.map(item => `
-                <div class="estoque-item-select" onclick="selecionarItemParaVenda(${item.id}, '${item.nome}', ${item.custo})">
-                    <span class="estoque-item-nome">${item.nome}</span>
-                    <span class="estoque-item-qta">Qtd: ${item.quantidade}</span>
-                    <span class="estoque-item-custo">R$ ${Number(item.custo).toFixed(2)}</span>
-                </div>
-            `).join("");
-        }
-        
-        // Guardar referência da venda
-        window._vendaFaltanteContext = {
-            vendaId,
-            produto: venda.produto,
-            cliente: venda.cliente
-        };
-        
-        openModal("modal-add-item-venda");
-    };
-}
-
-function selecionarItemParaVenda(itemId, itemNome, itemCusto) {
-    document.querySelectorAll("#lista-estoque-itens-venda .estoque-item-select.selected").forEach(el => {
-        el.classList.remove("selected");
-    });
-    event.target.closest(".estoque-item-select").classList.add("selected");
-    
-    document.getElementById("add-item-venda-valor").value = Number(itemCusto).toFixed(2);
-    document.getElementById("add-item-venda-custo").value = Number(itemCusto).toFixed(2);
-    window._vendaFaltanteContext.itemId = itemId;
-    window._vendaFaltanteContext.itemNome = itemNome;
-}
-
-function confirmarAdicionarItemVenda() {
-    if (!window._vendaFaltanteContext.itemNome) {
-        toast("Selecione um item do estoque!", "error");
-        return;
-    }
-
-    const qtd = parseInt(document.getElementById("add-item-venda-qtd").value) || 1;
-    const valor = parseFloat(document.getElementById("add-item-venda-valor").value) || 0;
-    const custo = parseFloat(document.getElementById("add-item-venda-custo").value) || 0;
-
-    if (qtd <= 0 || valor < 0 || custo < 0) {
-        toast("Preencha os valores corretamente!", "error");
-        return;
-    }
-
-    let sucessos = 0;
-    let erros = 0;
-    
-    for (let i = 0; i < qtd; i++) {
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/vendas", true);
-        xhr.setRequestHeader("Content-Type", "application/json");
-        
-        xhr.onload = () => {
-            if (xhr.status === 201) {
-                sucessos++;
-            } else {
-                erros++;
-            }
-            
-            if (sucessos + erros === qtd) {
-                if (erros === 0) {
-                    toast(`${sucessos} item(s) adicionado(s) com sucesso!`, "success");
-                    closeModal("modal-add-item-venda");
-                    renderVendas();
-                    openDashboard();
-                } else if (sucessos > 0) {
-                    toast(`${sucessos} item(s) adicionado(s), ${erros} falharam!`, "warning");
-                    renderVendas();
-                    openDashboard();
-                } else {
-                    toast("Erro ao adicionar itens", "error");
-                }
-            }
-        };
-        
-        xhr.onerror = () => {
-            erros++;
-            if (sucessos + erros === qtd) {
-                toast("Erro na requisição", "error");
-            }
-        };
-        
-        xhr.send(JSON.stringify({
-            produto: window._vendaFaltanteContext.itemNome,
-            valor: valor,
-            custoProducao: custo,
-            cliente: window._vendaFaltanteContext.cliente,
-            data: new Date().toLocaleDateString('pt-BR'),
-            hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-        }));
-    }
-}
-
-// Excluir uma venda
-function excluirVenda(vendaId, btn) {
-    if (!confirm("Tem certeza que deseja excluir essa venda?")) return;
-
-    // Deletar a venda do servidor
-    const xhr = new XMLHttpRequest();
-    xhr.open("DELETE", `/api/vendas/${vendaId}`, true);
-    xhr.onload = () => {
-        if (xhr.status === 200) {
-            // Recarregar dados
-            toast("Venda excluída com sucesso!", "success");
-            renderVendas();
-            if (typeof openDashboard === 'function') openDashboard();
-        } else {
-            toast("Erro ao excluir venda", "error");
         }
     };
-    xhr.onerror = () => toast("Erro na requisição", "error");
-    xhr.send();
 }
 
 // ==============================
@@ -951,13 +959,11 @@ function openDashboard() {
                     `;
 
                     vendas.forEach(v => {
+                        const vendaId = v?.id || Math.random();
                         html += `
                         <div class="produto-venda-line">
-                            <div class="produto-venda-row">
-                                <span class="produto-venda-nome">${v?.produto || "Produto"}</span>
-                                <span class="produto-venda-preco">R$ ${(Number(v?.valor) || 0).toFixed(2)}</span>
-                            </div>
-                            <span class="produto-venda-hora">${v?.hora ? `• ${v.hora}` : ""}</span>
+                            <span class="produto-venda-nome">${v?.produto || "Produto"}</span>
+                            <span class="produto-venda-preco">R$ ${(Number(v?.valor) || 0).toFixed(2)}</span>
                         </div>
                         `;
                     });
@@ -1116,8 +1122,7 @@ function confirmarAdicionarItemFaltante() {
             valor: valor,
             custoProducao: custo,
             cliente: _itemFaltanteContext.cliente,
-            data: new Date().toLocaleDateString('pt-BR'),
-            hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+            data: new Date().toLocaleDateString('pt-BR')
         }));
     }
 }

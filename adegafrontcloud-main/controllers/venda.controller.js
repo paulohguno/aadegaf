@@ -1,4 +1,4 @@
-const { Venda } = require("../models");
+const { Venda, Produto, Estoque } = require("../models");
 
 exports.listar = async (_req, res) => {
   try {
@@ -64,6 +64,27 @@ exports.atualizar = async (req, res) => {
 exports.remover = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Buscar venda
+    const venda = await Venda.findByPk(id);
+    if (!venda) {
+      return res.status(404).json({ error: "Venda não encontrada" });
+    }
+    
+    // Buscar produto para devolver itens
+    const produto = await Produto.findOne({ where: { nome: venda.produto } });
+    if (produto && produto.composicao && Array.isArray(produto.composicao)) {
+      // Devolver cada item para o estoque
+      for (const comp of produto.composicao) {
+        const estoqueItem = await Estoque.findByPk(comp.id);
+        if (estoqueItem) {
+          estoqueItem.quantidade += comp.qtdConsumo;
+          await estoqueItem.save();
+        }
+      }
+    }
+    
+    // Deletar venda
     const deleted = await Venda.destroy({ where: { id } });
     if (!deleted) {
       return res.status(404).json({ error: "Venda não encontrada" });
